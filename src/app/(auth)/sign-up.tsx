@@ -1,18 +1,17 @@
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Text,
   View,
 } from "react-native";
 import { router } from "expo-router";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import AuthHeader from "../components/auth/AuthHeader";
 import AuthInput from "../components/auth/AuthInput";
 import PasswordInput from "../components/auth/PasswordInput";
 import AuthButton from "../components/auth/AuthButton";
 import AuthFooter from "../components/auth/AuthFooter";
+import { useAuthStore } from "../../store/auth.store";
 
 export default function SignUpScreen() {
   const [firstName, setFirstName] = useState("");
@@ -20,100 +19,124 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const loading = useAuthStore(
+    (state) => state.loading,
+  );
+
+  const signUp = useAuthStore(
+    (state) => state.signUp,
+  );
+
 
   const handleSignUp = async () => {
-    setLoading(true);
-
     try {
-      // Connect registration API here.
+      await signUp({
+        firstName,
+        lastName,
+        email,
+        phone,
+        password,
+      });
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000)
+      router.push({
+        pathname: "/(auth)/otp-verification",
+        params: {
+          email,
+          purpose: "signup",
+        },
+      });
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to create account",
       );
-
-      router.push("/(auth)/otp-verification");
-    } finally {
-      setLoading(false);
     }
   };
 
+
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       className="flex-1 bg-white"
-      behavior={
-        Platform.OS === "ios" ? "padding" : undefined
-      }
+      contentContainerClassName="grow px-6 pb-20 pt-12"
+      enableOnAndroid
+      extraScrollHeight={40}
+      extraHeight={100}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        contentContainerClassName="px-6 pb-10 pt-12"
-        keyboardShouldPersistTaps="handled"
-      >
-        <AuthHeader
-          title="Create account"
-          subtitle="Create an account to start tracking your activities."
-        />
+      <AuthHeader
+        title="Create account"
+        subtitle="Create an account to start tracking your activities."
+      />
 
-        <View className="flex-row">
-          <View className="mr-2 flex-1">
-            <AuthInput
-              label="First name"
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder="First name"
-            />
-          </View>
-
-          <View className="ml-2 flex-1">
-            <AuthInput
-              label="Last name"
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder="Last name"
-            />
-          </View>
+      {/* First + Last Name */}
+      <View className="flex-row">
+        <View className="mr-2 flex-1">
+          <AuthInput
+            label="First name"
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="First name"
+          />
         </View>
 
-        <AuthInput
-          label="Email address"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        <View className="ml-2 flex-1">
+          <AuthInput
+            label="Last name"
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="Last name"
+          />
+        </View>
+      </View>
 
-        <AuthInput
-          label="Phone number"
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="08012345678"
-          keyboardType="phone-pad"
-        />
+      {/* Email */}
+      <AuthInput
+        label="Email address"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
 
-        <PasswordInput
-          label="Password"
-          value={password}
-          onChangeText={setPassword}
-        />
+      {/* Phone */}
+      <AuthInput
+        label="Phone number"
+        value={phone}
+        onChangeText={setPhone}
+        placeholder="08012345678"
+        keyboardType="phone-pad"
+      />
 
-        <Text className="mb-6 text-xs leading-5 text-slate-500">
-          By creating an account, you agree to our Terms of
-          Service and Privacy Policy.
-        </Text>
+      {/* Password */}
+      <PasswordInput
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+      />
 
-        <AuthButton
-          title="Create Account"
-          onPress={handleSignUp}
-          loading={loading}
-        />
+      {/* Terms */}
+      <Text className="mb-6 text-xs leading-5 text-slate-500">
+        By creating an account, you agree to our Terms of
+        Service and Privacy Policy.
+      </Text>
 
-        <AuthFooter
-          message="Already have an account?"
-          actionText="Sign In"
-          onPress={() => router.push("/(auth)/sign-in")}
-        />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {/* Create Account */}
+      <AuthButton
+        title="Create Account"
+        onPress={handleSignUp}
+      />
+
+      {/* Footer */}
+      <AuthFooter
+        message="Already have an account?"
+        actionText="Sign In"
+        onPress={() => router.push("/(auth)/sign-in")}
+      />
+    </KeyboardAwareScrollView>
   );
 }

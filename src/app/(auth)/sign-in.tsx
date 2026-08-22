@@ -1,13 +1,10 @@
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Text,
   TouchableOpacity,
-  View,
 } from "react-native";
 import { router } from "expo-router";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import AuthHeader from "../components/auth/AuthHeader";
 import AuthInput from "../components/auth/AuthInput";
@@ -17,86 +14,95 @@ import AuthDivider from "../components/auth/AuthDivider";
 import SocialButton from "../components/auth/SocialButton";
 import AuthFooter from "../components/auth/AuthFooter";
 
+import { useAuthStore } from "../../store/auth.store";
+
 export default function SignInScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
 
+  const signIn = useAuthStore(
+    (state) => state.signIn,
+  );
+
+  const loading = useAuthStore(
+    (state) => state.loading,
+  );
+
+  
   const handleSignIn = async () => {
-    setLoading(true);
-
     try {
-      // Connect your API here.
+      await signIn(email, password);
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000)
+      router.replace("/(root)/(tabs)");
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to sign in",
       );
-
-      router.replace("/");
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       className="flex-1 bg-white"
-      behavior={
-        Platform.OS === "ios" ? "padding" : undefined
-      }
+      contentContainerClassName="grow px-6 pb-20 pt-16"
+      enableOnAndroid
+      extraScrollHeight={40}
+      extraHeight={100}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        contentContainerClassName="flex-grow px-6 pb-10 pt-16"
-        keyboardShouldPersistTaps="handled"
+      <AuthHeader
+        title="Welcome back"
+        subtitle="Sign in to continue to your account."
+      />
+
+      {/* Email */}
+      <AuthInput
+        label="Email address"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+
+      {/* Password */}
+      <PasswordInput
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+      />
+
+      {/* Forgot Password */}
+      <TouchableOpacity
+        onPress={() => router.push("/(auth)/forgot-password")}
+        className="mb-6 self-end"
       >
-        <AuthHeader
-          title="Welcome back"
-          subtitle="Sign in to continue to your account."
-        />
+        <Text className="font-semibold text-blue-600">
+          Forgot password?
+        </Text>
+      </TouchableOpacity>
 
-        <AuthInput
-          label="Email address"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+      <AuthButton
+        title="Sign In"
+        onPress={handleSignIn}
+      />
 
-        <PasswordInput
-          label="Password"
-          value={password}
-          onChangeText={setPassword}
-        />
+      <AuthDivider />
 
-        <TouchableOpacity
-          onPress={() => router.push("/(auth)/forgot-password")}
-          className="mb-6 self-end"
-        >
-          <Text className="font-semibold text-blue-600">
-            Forgot password?
-          </Text>
-        </TouchableOpacity>
+      <SocialButton
+        title="Continue with Google"
+        onPress={() => {}}
+      />
 
-        <AuthButton
-          title="Sign In"
-          onPress={handleSignIn}
-          loading={loading}
-        />
-
-        <AuthDivider />
-
-        <SocialButton
-          title="Continue with Google"
-          onPress={() => {}}
-        />
-
-        <AuthFooter
-          message="Don't have an account?"
-          actionText="Sign Up"
-          onPress={() => router.push("/(auth)/sign-up")}
-        />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <AuthFooter
+        message="Don't have an account?"
+        actionText="Sign Up"
+        onPress={() => router.push("/(auth)/sign-up")}
+      />
+    </KeyboardAwareScrollView>
   );
 }
