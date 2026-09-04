@@ -13,7 +13,7 @@ export default function OnboardingStepTwo() {
     };
 
     const handleSkip = () => {
-        router.replace("/(root)/(auth)/sign-in");
+        router.replace("/(auth)/sign-in");
     };
 
     return (

@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import type {
   Session,
   User,
@@ -6,10 +8,17 @@ import type {
 
 import { supabase } from "../lib/supabase";
 
+const ONBOARDING_COMPLETED_KEY = "tracker_onboarding_completed";
+
+const PENDING_VERIFICATION_EMAIL_KEY = "tracker_pending_verification_email";
+
 interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  initialized: boolean;
+
+  pendingVerificationEmail: string | null;
 
   initialize: () => Promise<void>;
 
@@ -32,68 +41,99 @@ interface AuthState {
     purpose: "signup" | "forgot-password",
   ) => Promise<void>;
 
-  updatePassword: (
-    password: string,
+  resendOtp: (
+    email: string,
+    purpose: "signup" | "forgot-password",
   ) => Promise<void>;
 
   forgotPassword: (
     email: string,
   ) => Promise<void>;
 
+  updatePassword: (
+    password: string,
+  ) => Promise<void>;
+
   signOut: () => Promise<void>;
+
+  updateProfile: (input: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    currency: string;
+    avatarUrl?: string | null;
+  }) => Promise<void>;
 }
+
+
 
 export const useAuthStore = create<AuthState>(
   (set) => ({
     user: null,
     session: null,
     loading: false,
+    initialized: false,
+    pendingVerificationEmail: null,
 
     initialize: async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      set({
-        session,
-        user: session?.user ?? null,
-      });
-
-      supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          set({
-            session,
-            user: session?.user ?? null,
-          });
-        },
-      );
-    },
-
-    signIn: async (
-      email,
-      password,
-    ) => {
-      set({ loading: true });
-
       try {
-        const {
-          data,
-          error,
-        } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) {
-          throw error;
+        const [
+          sessionResult,
+          pendingEmail,
+        ] = await Promise.all([
+          supabase.auth.getSession(),
+          AsyncStorage.getItem(
+            PENDING_VERIFICATION_EMAIL_KEY,
+          ),
+        ]);
+    
+        const session =
+          sessionResult.data.session;
+    
+        const isVerified =
+          Boolean(
+            session?.user?.email_confirmed_at,
+          );
+    
+        /*
+         * If a verified session exists, an old pending
+         * verification value must no longer control
+         * navigation.
+         */
+        if (isVerified && pendingEmail) {
+          await AsyncStorage.removeItem(
+            PENDING_VERIFICATION_EMAIL_KEY,
+          );
         }
-
+    
         set({
-          user: data.user,
-          session: data.session,
+          session,
+          user: session?.user ?? null,
+          pendingVerificationEmail:
+            isVerified
+              ? null
+              : pendingEmail ?? null,
+          initialized: true,
         });
-      } finally {
-        set({ loading: false });
+    
+        supabase.auth.onAuthStateChange(
+          (_event, updatedSession) => {
+            set({
+              session: updatedSession,
+              user:
+                updatedSession?.user ?? null,
+            });
+          },
+        );
+      } catch (error) {
+        console.error(
+          "Failed to initialize authentication:",
+          error,
+        );
+    
+        set({
+          initialized: true,
+        });
       }
     },
 
@@ -107,17 +147,23 @@ export const useAuthStore = create<AuthState>(
       set({ loading: true });
 
       try {
+        const normalizedEmail =
+          email.trim().toLowerCase();
+
         const {
+          data,
           error,
         } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
 
           options: {
             data: {
-              first_name: firstName,
-              last_name: lastName,
-              phone,
+              first_name:
+                firstName.trim(),
+              last_name:
+                lastName.trim(),
+              phone: phone.trim(),
               currency: "NGN",
             },
           },
@@ -126,6 +172,69 @@ export const useAuthStore = create<AuthState>(
         if (error) {
           throw error;
         }
+
+        /*
+         * Store the email locally so that if the
+         * app is closed before verification, we can
+         * send the user back to OTP verification.
+         */
+        await AsyncStorage.setItem(
+          PENDING_VERIFICATION_EMAIL_KEY,
+          normalizedEmail,
+        );
+
+        set({
+          user: data.user,
+          session: data.session,
+          pendingVerificationEmail:
+            normalizedEmail,
+        });
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    signIn: async (
+      email,
+      password,
+    ) => {
+      set({ loading: true });
+
+      try {
+        const {
+          data,
+          error,
+        } =
+          await supabase.auth.signInWithPassword({
+            email: email
+              .trim()
+              .toLowerCase(),
+            password,
+          });
+
+        if (error) {
+          throw error;
+        }
+
+        /*
+        * The user has successfully signed in.
+        * Mark onboarding as completed so old and
+        * new users are not shown onboarding again.
+        */
+        await AsyncStorage.setItem(
+          ONBOARDING_COMPLETED_KEY,
+          "true",
+        );
+
+        await AsyncStorage.removeItem(
+          PENDING_VERIFICATION_EMAIL_KEY,
+        );
+
+        set({
+          user: data.user,
+          session: data.session,
+          pendingVerificationEmail: null,
+        });
       } finally {
         set({ loading: false });
       }
@@ -147,68 +256,213 @@ export const useAuthStore = create<AuthState>(
         const {
           data,
           error,
-        } = await supabase.auth.verifyOtp({
-          email,
-          token,
-          type,
-        });
+        } =
+          await supabase.auth.verifyOtp({
+            email: email
+              .trim()
+              .toLowerCase(),
+            token: token.trim(),
+            type,
+          });
 
         if (error) {
           throw error;
         }
 
+        /*
+        * A successful signup verification means the
+        * user has completed the initial account flow.
+        */
+        if (purpose === "signup") {
+          await Promise.all([
+            AsyncStorage.removeItem(
+              PENDING_VERIFICATION_EMAIL_KEY,
+            ),
+            AsyncStorage.setItem(
+              ONBOARDING_COMPLETED_KEY,
+              "true",
+            ),
+          ]);
+        }
+
         set({
           user: data.user,
           session: data.session,
+          pendingVerificationEmail:
+            purpose === "signup"
+              ? null
+              : email
+                  .trim()
+                  .toLowerCase(),
         });
       } finally {
         set({ loading: false });
       }
     },
 
-    updatePassword: async (password) => {
-        set({ loading: true });
-      
-        try {
-          const {
-            error,
-          } = await supabase.auth.updateUser({
+    resendOtp: async (
+      email,
+      purpose,
+    ) => {
+      set({ loading: true });
+
+      try {
+        const normalizedEmail =
+          email.trim().toLowerCase();
+
+        if (purpose === "signup") {
+          const { error } =
+            await supabase.auth.resend({
+              type: "signup",
+              email: normalizedEmail,
+            });
+
+          if (error) {
+            throw error;
+          }
+
+          await AsyncStorage.setItem(
+            PENDING_VERIFICATION_EMAIL_KEY,
+            normalizedEmail,
+          );
+
+          set({
+            pendingVerificationEmail:
+              normalizedEmail,
+          });
+
+          return;
+        }
+
+        const { error } =
+          await supabase.auth.resetPasswordForEmail(
+            normalizedEmail,
+          );
+
+        if (error) {
+          throw error;
+        }
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    forgotPassword: async (
+      email,
+    ) => {
+      set({ loading: true });
+
+      try {
+        const { error } =
+          await supabase.auth.resetPasswordForEmail(
+            email.trim().toLowerCase(),
+          );
+
+        if (error) {
+          throw error;
+        }
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    updatePassword: async (
+      password,
+    ) => {
+      set({ loading: true });
+
+      try {
+        const { error } =
+          await supabase.auth.updateUser({
             password,
           });
-      
-          if (error) {
-            throw error;
-          }
-        } finally {
-          set({ loading: false });
+
+        if (error) {
+          throw error;
         }
-      },
-      
-    forgotPassword: async (email) => {
-        set({ loading: true });
-      
-        try {
-          const {
-            error,
-          } = await supabase.auth.resetPasswordForEmail(
-            email,
-          );
-      
-          if (error) {
-            throw error;
-          }
-        } finally {
-          set({ loading: false });
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+
+    updateProfile: async ({
+      firstName,
+      lastName,
+      phone,
+      currency,
+      avatarUrl,
+    }) => {
+      set({
+        loading: true,
+      });
+    
+      try {
+        const {
+          data,
+          error,
+        } = await supabase.auth.updateUser({
+          data: {
+            first_name:
+              firstName.trim(),
+    
+            last_name:
+              lastName.trim(),
+    
+            phone:
+              phone.trim(),
+    
+            currency:
+              currency
+                .trim()
+                .toUpperCase(),
+    
+            ...(avatarUrl !== undefined
+              ? {
+                  avatar_url:
+                    avatarUrl,
+                }
+              : {}),
+          },
+        });
+    
+        if (error) {
+          throw error;
         }
-      },
+    
+        /*
+         * Immediately update Zustand with the
+         * latest Supabase user.
+         */
+    
+        set({
+          user: data.user,
+        });
+      } finally {
+        set({
+          loading: false,
+        });
+      }
+    },
 
     signOut: async () => {
-      await supabase.auth.signOut();
+      set({ loading: true });
 
-      set({
-        user: null,
-        session: null,
-      });
+      try {
+        const { error } =
+          await supabase.auth.signOut();
+
+        if (error) {
+          throw error;
+        }
+
+        set({
+          user: null,
+          session: null,
+        });
+      } finally {
+        set({ loading: false });
+      }
     },
   }),
 );

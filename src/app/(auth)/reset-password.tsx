@@ -2,44 +2,67 @@ import { useState } from "react";
 import {
   Text,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import AuthHeader from "../components/auth/AuthHeader";
-import PasswordInput from "../components/auth/PasswordInput";
-import AuthButton from "../components/auth/AuthButton";
+import AuthHeader from "../../components/auth/AuthHeader";
+import PasswordInput from "../../components/auth/PasswordInput";
+import AuthButton from "../../components/auth/AuthButton";
 
 import { useAuthStore } from "../../store/auth.store";
 
-export default function ResetPasswordScreen() {
-  const params = useLocalSearchParams<{
-    email?: string;
-    otp?: string;
-  }>();
+import {
+  FieldErrors,
+  validateConfirmPassword,
+  validatePassword,
+} from "../../utils/validation";
 
+export default function ResetPasswordScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] =
     useState("");
 
+  const [errors, setErrors] = useState<FieldErrors>({});
+
   const updatePassword = useAuthStore(
     (state) => state.updatePassword,
   );
-  
+
   const loading = useAuthStore(
     (state) => state.loading,
   );
 
-  
+  const clearError = (field: string) => {
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      [field]: undefined,
+    }));
+  };
+
   const handleResetPassword = async () => {
-    if (password !== confirmPassword) {
-      alert("Passwords do not match");
-      return;
+    const newErrors: FieldErrors = {};
+
+    const passwordError =
+      validatePassword(password);
+
+    const confirmPasswordError =
+      validateConfirmPassword(
+        password,
+        confirmPassword,
+      );
+
+    if (passwordError) {
+      newErrors.password = passwordError;
     }
 
-    if (password.length < 8) {
-      alert(
-        "Password must contain at least 8 characters",
-      );
+    if (confirmPasswordError) {
+      newErrors.confirmPassword =
+        confirmPasswordError;
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
       return;
     }
 
@@ -48,7 +71,9 @@ export default function ResetPasswordScreen() {
 
       alert("Password reset successfully");
 
-      await useAuthStore.getState().signOut();
+      await useAuthStore
+        .getState()
+        .signOut();
 
       router.replace("/(auth)/sign-in");
     } catch (error) {
@@ -59,7 +84,6 @@ export default function ResetPasswordScreen() {
       );
     }
   };
-
 
   return (
     <KeyboardAwareScrollView
@@ -79,15 +103,23 @@ export default function ResetPasswordScreen() {
       <PasswordInput
         label="New password"
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(text) => {
+          setPassword(text);
+          clearError("password");
+        }}
         placeholder="Enter new password"
+        error={errors.password}
       />
 
       <PasswordInput
         label="Confirm password"
         value={confirmPassword}
-        onChangeText={setConfirmPassword}
+        onChangeText={(text) => {
+          setConfirmPassword(text);
+          clearError("confirmPassword");
+        }}
         placeholder="Confirm new password"
+        error={errors.confirmPassword}
       />
 
       <Text className="mb-6 text-xs leading-5 text-slate-500">
@@ -97,6 +129,7 @@ export default function ResetPasswordScreen() {
       <AuthButton
         title="Reset Password"
         onPress={handleResetPassword}
+        loading={loading}
       />
     </KeyboardAwareScrollView>
   );

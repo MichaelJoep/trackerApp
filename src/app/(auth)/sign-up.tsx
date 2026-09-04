@@ -6,12 +6,21 @@ import {
 import { router } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import AuthHeader from "../components/auth/AuthHeader";
-import AuthInput from "../components/auth/AuthInput";
-import PasswordInput from "../components/auth/PasswordInput";
-import AuthButton from "../components/auth/AuthButton";
-import AuthFooter from "../components/auth/AuthFooter";
+import AuthHeader from "../../components/auth/AuthHeader";
+import AuthInput from "../../components/auth/AuthInput";
+import PasswordInput from "../../components/auth/PasswordInput";
+import AuthButton from "../../components/auth/AuthButton";
+import AuthFooter from "../../components/auth/AuthFooter";
+
 import { useAuthStore } from "../../store/auth.store";
+
+import {
+  FieldErrors,
+  validateEmail,
+  validateName,
+  validatePassword,
+  validatePhone,
+} from "../../utils/validation";
 
 export default function SignUpScreen() {
   const [firstName, setFirstName] = useState("");
@@ -19,6 +28,8 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const loading = useAuthStore(
     (state) => state.loading,
@@ -28,21 +39,75 @@ export default function SignUpScreen() {
     (state) => state.signUp,
   );
 
+  const clearError = (field: string) => {
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      [field]: undefined,
+    }));
+  };
 
   const handleSignUp = async () => {
+    const newErrors: FieldErrors = {};
+
+    const firstNameError = validateName(
+      firstName,
+      "First name",
+    );
+
+    const lastNameError = validateName(
+      lastName,
+      "Last name",
+    );
+
+    const emailError = validateEmail(email);
+
+    const phoneError = validatePhone(phone);
+
+    const passwordError = validatePassword(password);
+
+    if (firstNameError) {
+      newErrors.firstName = firstNameError;
+    }
+
+    if (lastNameError) {
+      newErrors.lastName = lastNameError;
+    }
+
+    if (emailError) {
+      newErrors.email = emailError;
+    }
+
+    if (phoneError) {
+      newErrors.phone = phoneError;
+    }
+
+    if (passwordError) {
+      newErrors.password = passwordError;
+    }
+
+    setErrors(newErrors);
+
+    // Stop before sending invalid data to Supabase.
+    if (Object.keys(newErrors).length > 0) {
+      return;
+    }
+
+    const normalizedEmail =
+      email.trim().toLowerCase();
+
     try {
       await signUp({
-        firstName,
-        lastName,
-        email,
-        phone,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: normalizedEmail,
+        phone: phone.trim(),
         password,
       });
 
       router.push({
         pathname: "/(auth)/otp-verification",
         params: {
-          email,
+          email: normalizedEmail,
           purpose: "signup",
         },
       });
@@ -54,7 +119,6 @@ export default function SignUpScreen() {
       );
     }
   };
-
 
   return (
     <KeyboardAwareScrollView
@@ -71,14 +135,18 @@ export default function SignUpScreen() {
         subtitle="Create an account to start tracking your activities."
       />
 
-      {/* First + Last Name */}
       <View className="flex-row">
         <View className="mr-2 flex-1">
           <AuthInput
             label="First name"
             value={firstName}
-            onChangeText={setFirstName}
+            onChangeText={(text) => {
+              setFirstName(text);
+              clearError("firstName");
+            }}
             placeholder="First name"
+            error={errors.firstName}
+            autoCapitalize="words"
           />
         </View>
 
@@ -86,52 +154,68 @@ export default function SignUpScreen() {
           <AuthInput
             label="Last name"
             value={lastName}
-            onChangeText={setLastName}
+            onChangeText={(text) => {
+              setLastName(text);
+              clearError("lastName");
+            }}
             placeholder="Last name"
+            error={errors.lastName}
+            autoCapitalize="words"
           />
         </View>
       </View>
 
-      {/* Email */}
       <AuthInput
         label="Email address"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => {
+          setEmail(text);
+          clearError("email");
+        }}
         placeholder="you@example.com"
+        error={errors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
       />
 
-      {/* Phone */}
       <AuthInput
         label="Phone number"
         value={phone}
-        onChangeText={setPhone}
+        onChangeText={(text) => {
+          setPhone(text);
+          clearError("phone");
+        }}
         placeholder="08012345678"
+        error={errors.phone}
         keyboardType="phone-pad"
       />
 
-      {/* Password */}
       <PasswordInput
         label="Password"
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(text) => {
+          setPassword(text);
+          clearError("password");
+        }}
+        error={errors.password}
       />
 
-      {/* Terms */}
+      <Text className="mb-6 text-xs leading-5 text-slate-500">
+        Your password should contain at least 8 characters.
+      </Text>
+
       <Text className="mb-6 text-xs leading-5 text-slate-500">
         By creating an account, you agree to our Terms of
         Service and Privacy Policy.
       </Text>
 
-      {/* Create Account */}
       <AuthButton
         title="Create Account"
         onPress={handleSignUp}
+        loading={loading}
       />
 
-      {/* Footer */}
       <AuthFooter
         message="Already have an account?"
         actionText="Sign In"

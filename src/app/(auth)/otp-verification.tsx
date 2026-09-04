@@ -1,14 +1,15 @@
 import {useState} from "react";
 import {Text, TouchableOpacity, View } from "react-native";
-  import { router, useLocalSearchParams } from "expo-router";
-  import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { router, useLocalSearchParams } from "expo-router";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {validateOtp,} from "../../utils/validation";
   
-  import AuthHeader from "../components/auth/AuthHeader";
-  import OTPInput from "../components/auth/OTPInput";
-  import AuthButton from "../components/auth/AuthButton";
-  import { useAuthStore } from "../../store/auth.store";
+import AuthHeader from "../../components/auth/AuthHeader";
+import OTPInput from "../../components/auth/OTPInput";
+import AuthButton from "../../components/auth/AuthButton";
+import { useAuthStore } from "../../store/auth.store";
   
-  export default function OTPVerificationScreen() {
+export default function OTPVerificationScreen() {
     const params = useLocalSearchParams<{
       email?: string;
       purpose?: string;
@@ -17,43 +18,83 @@ import {Text, TouchableOpacity, View } from "react-native";
     const [otp, setOtp] = useState("");
 
     const verifyOtp = useAuthStore((state) => state.verifyOtp,);
+    const resendOtp = useAuthStore((state) => state.resendOtp,);
     const loading = useAuthStore((state) => state.loading,);
     const isForgotPassword = params.purpose === "forgot-password";
   
+
     const handleVerify = async () => {
+      if (!params.email) {
+        alert("Email address is missing");
+        return;
+      }
+    
+      const otpError = validateOtp(otp);
+    
+      if (otpError) {
+        alert(otpError);
+        return;
+      }
+    
+      try {
+        await verifyOtp(
+          params.email.trim().toLowerCase(),
+          otp,
+          isForgotPassword
+            ? "forgot-password"
+            : "signup",
+        );
+    
+        if (isForgotPassword) {
+          router.push({
+            pathname: "/(auth)/reset-password",
+            params: {
+              email: params.email,
+            },
+          });
+    
+          return;
+        }
+    
+        router.replace("/(tabs)");
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "Invalid verification code",
+        );
+      }
+    };
+
+
+  const handleResendCode = async () => {
     if (!params.email) {
       alert("Email address is missing");
       return;
     }
 
     try {
-      await verifyOtp(
+      await resendOtp(
         params.email,
-        otp,
-        isForgotPassword ? "forgot-password" : "signup",
+        isForgotPassword
+          ? "forgot-password"
+          : "signup",
       );
 
-      if (isForgotPassword) {
-        router.push({
-          pathname: "/(auth)/reset-password",
-          params: {
-            email: params.email,
-            otp,
-          },
-        });
+      setOtp("");
 
-        return;
-      }
-
-      router.replace("/(root)/(tabs)");
+      alert(
+        "A new verification code has been sent to your email.",
+      );
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
-          : "Invalid verification code",
+          : "Unable to resend verification code",
       );
     }
   };
+
   
     return (
       <KeyboardAwareScrollView
@@ -98,11 +139,17 @@ import {Text, TouchableOpacity, View } from "react-native";
             Didn't receive the code?
           </Text>
   
-          <TouchableOpacity className="mt-2">
-            <Text className="font-bold text-blue-600">
-              Resend Code
-            </Text>
-          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleResendCode}
+            disabled={loading}
+            className="mt-2"
+          >
+          <Text className="font-bold text-blue-600">
+            {loading
+              ? "Sending..."
+              : "Resend Code"}
+          </Text>
+        </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>
     );

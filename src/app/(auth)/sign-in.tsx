@@ -6,13 +6,13 @@ import {
 import { router } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import AuthHeader from "../components/auth/AuthHeader";
-import AuthInput from "../components/auth/AuthInput";
-import PasswordInput from "../components/auth/PasswordInput";
-import AuthButton from "../components/auth/AuthButton";
-import AuthDivider from "../components/auth/AuthDivider";
-import SocialButton from "../components/auth/SocialButton";
-import AuthFooter from "../components/auth/AuthFooter";
+import AuthHeader from "../../components/auth/AuthHeader";
+import AuthInput from "../../components/auth/AuthInput";
+import PasswordInput from "../../components/auth/PasswordInput";
+import AuthButton from "../../components/auth/AuthButton";
+import AuthDivider from "../../components/auth/AuthDivider";
+import SocialButton from "../../components/auth/SocialButton";
+import AuthFooter from "../../components/auth/AuthFooter";
 
 import { useAuthStore } from "../../store/auth.store";
 
@@ -33,7 +33,7 @@ export default function SignInScreen() {
     try {
       await signIn(email, password);
 
-      router.replace("/(root)/(tabs)");
+      router.replace("/(tabs)");
     } catch (error) {
       alert(
         error instanceof Error

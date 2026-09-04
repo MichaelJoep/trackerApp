@@ -1,10 +1,16 @@
 import { Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function OnboardingStepThree() {
-    const handleGetStarted = () => {
-        router.replace("/(auth)/sign-in");
+    const handleGetStarted = async () => {
+        await AsyncStorage.setItem(
+            "tracker_onboarding_completed",
+            "true",
+          );
+
+          router.replace("/(auth)/sign-up");
     };
 
     const handleBack = () => {

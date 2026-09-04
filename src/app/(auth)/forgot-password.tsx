@@ -6,28 +6,53 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {
+  FieldErrors,
+  validateEmail,
+} from "../../utils/validation";
 
-import AuthHeader from "../components/auth/AuthHeader";
-import AuthInput from "../components/auth/AuthInput";
-import AuthButton from "../components/auth/AuthButton";
+import AuthHeader from "../../components/auth/AuthHeader";
+import AuthInput from "../../components/auth/AuthInput";
+import AuthButton from "../../components/auth/AuthButton";
 
 import { useAuthStore } from "../../store/auth.store";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const forgotPassword = useAuthStore(
     (state) => state.forgotPassword,
   );
 
+  const loading = useAuthStore(
+    (state) => state.loading,
+  );
+
+
   const handleSendCode = async () => {
+    const emailError = validateEmail(email);
+  
+    if (emailError) {
+      setErrors({
+        email: emailError,
+      });
+  
+      return;
+    }
+  
+    const normalizedEmail =
+      email.trim().toLowerCase();
+  
+    setErrors({});
+  
     try {
-      await forgotPassword(email);
+      await forgotPassword(normalizedEmail);
   
       router.push({
         pathname: "/(auth)/otp-verification",
         params: {
-          email,
+          email: normalizedEmail,
           purpose: "forgot-password",
         },
       });
@@ -35,7 +60,7 @@ export default function ForgotPasswordScreen() {
       alert(
         error instanceof Error
           ? error.message
-          : "Unable to send reset code",
+          : "Unable to send verification code",
       );
     }
   };
@@ -69,8 +94,16 @@ export default function ForgotPasswordScreen() {
       <AuthInput
         label="Email address"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => {
+          setEmail(text);
+
+          setErrors((currentErrors) => ({
+            ...currentErrors,
+            email: undefined,
+          }));
+        }}
         placeholder="you@example.com"
+        error={errors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -79,6 +112,7 @@ export default function ForgotPasswordScreen() {
       <AuthButton
         title="Send Verification Code"
         onPress={handleSendCode}
+        loading={loading}
       />
 
       <View className="mt-8 items-center">

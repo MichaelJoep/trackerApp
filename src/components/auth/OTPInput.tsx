@@ -15,55 +15,54 @@ export default function OTPInput({
   value,
   onChangeText,
 }: OTPInputProps) {
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs =
+    useRef<Array<TextInput | null>>([]);
 
-  const digits = value.padEnd(6, "").split("").slice(0, 6);
+  const digits = Array.from(
+    { length: 6 },
+    (_, index) => value[index] ?? "",
+  );
 
   const handleChange = (
     text: string,
-    index: number
+    index: number,
   ) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
+    const cleaned = text.replace(
+      /[^0-9]/g,
+      "",
+    );
 
-    // Handle pasted OTP e.g. 123456
+    // Handles pasted OTP.
     if (cleaned.length > 1) {
       const pasted = cleaned.slice(0, 6);
 
       onChangeText(pasted);
 
-      const nextIndex = Math.min(
-        pasted.length,
-        5
-      );
+      const focusIndex =
+        Math.min(pasted.length, 5);
 
-      inputRefs.current[nextIndex]?.focus();
+      inputRefs.current[focusIndex]?.focus();
 
       return;
     }
 
-    const currentDigits = value
-      .replace(/[^0-9]/g, "")
-      .split("");
+    const updatedDigits = [...digits];
 
-    currentDigits[index] = cleaned;
+    updatedDigits[index] = cleaned;
 
-    const newValue = currentDigits
-      .join("")
-      .slice(0, 6);
+    const newValue =
+      updatedDigits.join("").slice(0, 6);
 
     onChangeText(newValue);
 
-    if (
-      cleaned &&
-      index < 5
-    ) {
+    if (cleaned && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (
     event: NativeSyntheticEvent<TextInputKeyPressEventData>,
-    index: number
+    index: number,
   ) => {
     if (
       event.nativeEvent.key === "Backspace" &&
@@ -76,13 +75,13 @@ export default function OTPInput({
 
   return (
     <View className="mb-8 flex-row justify-between">
-      {Array.from({ length: 6 }).map((_, index) => (
+      {digits.map((digit, index) => (
         <TextInput
           key={index}
           ref={(ref) => {
             inputRefs.current[index] = ref;
           }}
-          value={digits[index] || ""}
+          value={digit}
           onChangeText={(text) =>
             handleChange(text, index)
           }
